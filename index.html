@@ -1,66 +1,204 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>FTP Plus OAuth</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FTP Plus OAuth - Processing...</title>
     <style>
         body {
-            font-family: Arial, sans-serif;
-            text-align: center;
-            padding: 50px;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #ff6b35, #f7931e);
             color: white;
-            margin: 0;
-            min-height: 100vh;
             display: flex;
-            align-items: center;
             justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            margin: 0;
+            padding: 20px;
+            box-sizing: border-box;
         }
         .container {
-            background: rgba(255,255,255,0.1);
-            padding: 40px;
-            border-radius: 15px;
+            text-align: center;
+            background: rgba(255, 255, 255, 0.1);
             backdrop-filter: blur(10px);
-            max-width: 400px;
+            border-radius: 16px;
+            padding: 40px;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            max-width: 500px;
         }
-        .icon { font-size: 64px; margin-bottom: 20px; }
-        h1 { margin: 0 0 20px 0; font-size: 28px; }
-        .manual-link {
-            display: inline-block;
-            background: rgba(255,255,255,0.2);
-            color: white;
-            text-decoration: none;
-            padding: 15px 25px;
+        .icon {
+            font-size: 64px;
+            margin-bottom: 20px;
+        }
+        h1 {
+            margin: 0 0 20px 0;
+            font-size: 28px;
+        }
+        p {
+            margin: 10px 0;
+            opacity: 0.9;
+            line-height: 1.5;
+        }
+        .status {
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 8px;
+            padding: 20px;
+            margin: 20px 0;
+            border-left: 4px solid #fff;
+        }
+        .debug {
+            background: rgba(0, 0, 0, 0.2);
+            border-radius: 8px;
+            padding: 15px;
+            margin: 20px 0;
+            font-family: 'Monaco', 'Consolas', monospace;
+            font-size: 12px;
+            text-align: left;
+            white-space: pre-wrap;
+            word-break: break-all;
+        }
+        .redirect-btn {
+            background: #fff;
+            color: #ff6b35;
+            border: none;
+            padding: 12px 24px;
             border-radius: 8px;
             font-weight: bold;
-            margin-top: 20px;
+            cursor: pointer;
+            font-size: 16px;
+            margin: 10px;
+            transition: transform 0.2s;
+        }
+        .redirect-btn:hover {
+            transform: scale(1.05);
+        }
+        .redirect-btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+        .spinner {
+            border: 3px solid rgba(255, 255, 255, 0.3);
+            border-top: 3px solid white;
+            border-radius: 50%;
+            width: 30px;
+            height: 30px;
+            animation: spin 1s linear infinite;
+            margin: 20px auto;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
         }
     </style>
 </head>
 <body>
     <div class="container">
         <div class="icon">🚴‍♂️</div>
-        <h1>Authorization Complete!</h1>
-        <p>Opening FTP Plus app...</p>
-        <a href="#" class="manual-link" id="appLink">Click here if not redirected</a>
-        <div style="margin-top: 30px; font-size: 12px; opacity: 0.8;">
-            Cap Engineering Services<br>FTP Plus - Activity Analysis Tool
+        <h1>FTP Plus</h1>
+        <p id="message">Processing OAuth callback...</p>
+        
+        <div class="status" id="status">
+            <div class="spinner" id="spinner"></div>
+            <p id="statusText">Analyzing URL parameters...</p>
         </div>
+        
+        <div class="debug" id="debug"></div>
+        
+        <button class="redirect-btn" id="redirectBtn" onclick="manualRedirect()" style="display: none;">
+            Redirect to App
+        </button>
     </div>
 
     <script>
-        // Extract OAuth parameters and redirect to app
-        const params = new URLSearchParams(window.location.search);
-        const code = params.get('code');
-        const state = params.get('state');
-        
-        if (code && state) {
-            const appUrl = `ftp-plus://oauth/callback?code=${encodeURIComponent(code)}&state=${encodeURIComponent(state)}`;
-            document.getElementById('appLink').href = appUrl;
-            
-            // Immediate redirect
-            window.location.href = appUrl;
+        function updateStatus(message, showSpinner = true) {
+            document.getElementById('statusText').textContent = message;
+            document.getElementById('spinner').style.display = showSpinner ? 'block' : 'none';
         }
+
+        function updateDebug(info) {
+            document.getElementById('debug').textContent = info;
+        }
+
+        function manualRedirect() {
+            const params = new URLSearchParams(window.location.search);
+            const code = params.get('code');
+            const state = params.get('state');
+            
+            if (code && state) {
+                const appUrl = `ftp-plus://oauth/callback?code=${encodeURIComponent(code)}&state=${encodeURIComponent(state)}`;
+                window.location.href = appUrl;
+            } else {
+                alert('No OAuth parameters found. This page should only be accessed via Strava OAuth redirect.');
+            }
+        }
+
+        // Main processing
+        function processOAuth() {
+            const fullUrl = window.location.href;
+            const params = new URLSearchParams(window.location.search);
+            const fragment = window.location.hash;
+            
+            // Debug information
+            let debugInfo = `Full URL: ${fullUrl}\n\n`;
+            debugInfo += `Query Parameters:\n`;
+            for (const [key, value] of params.entries()) {
+                debugInfo += `  ${key}: ${value}\n`;
+            }
+            debugInfo += `\nFragment: ${fragment}\n\n`;
+            
+            const code = params.get('code');
+            const state = params.get('state');
+            const error = params.get('error');
+            const errorDescription = params.get('error_description');
+            
+            debugInfo += `Extracted Parameters:\n`;
+            debugInfo += `  code: ${code || 'Not found'}\n`;
+            debugInfo += `  state: ${state || 'Not found'}\n`;
+            debugInfo += `  error: ${error || 'Not found'}\n`;
+            debugInfo += `  error_description: ${errorDescription || 'Not found'}\n`;
+            
+            updateDebug(debugInfo);
+            
+            if (error) {
+                updateStatus('❌ OAuth Error Received', false);
+                document.getElementById('message').textContent = `Authentication failed: ${errorDescription || error}`;
+                return;
+            }
+            
+            if (code && state) {
+                updateStatus('✅ OAuth Success - Redirecting to App...', true);
+                document.getElementById('message').textContent = 'Authentication successful! Redirecting to FTP Plus app...';
+                
+                const appUrl = `ftp-plus://oauth/callback?code=${encodeURIComponent(code)}&state=${encodeURIComponent(state)}`;
+                debugInfo += `\nApp Redirect URL: ${appUrl}\n`;
+                updateDebug(debugInfo);
+                
+                // Show manual redirect button as backup
+                document.getElementById('redirectBtn').style.display = 'inline-block';
+                
+                // Attempt automatic redirect
+                setTimeout(() => {
+                    try {
+                        window.location.href = appUrl;
+                    } catch (e) {
+                        updateStatus('⚠️ Manual redirect required', false);
+                        document.getElementById('message').textContent = 'Please tap the button below to open FTP Plus app:';
+                    }
+                }, 1500);
+                
+            } else {
+                updateStatus('⚠️ No OAuth Parameters Found', false);
+                document.getElementById('message').textContent = 'This page should only be accessed via Strava OAuth redirect.';
+                
+                if (fullUrl.includes('#')) {
+                    debugInfo += '\n⚠️ Fragment detected - OAuth params might be in hash instead of query string\n';
+                    updateDebug(debugInfo);
+                }
+            }
+        }
+
+        // Run when page loads
+        document.addEventListener('DOMContentLoaded', processOAuth);
     </script>
 </body>
 </html>
