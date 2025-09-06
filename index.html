@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>FTP Plus OAuth</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            text-align: center;
+            padding: 50px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            margin: 0;
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .container {
+            background: rgba(255,255,255,0.1);
+            padding: 40px;
+            border-radius: 15px;
+            backdrop-filter: blur(10px);
+            max-width: 400px;
+        }
+        .icon { font-size: 64px; margin-bottom: 20px; }
+        h1 { margin: 0 0 20px 0; font-size: 28px; }
+        .manual-link {
+            display: inline-block;
+            background: rgba(255,255,255,0.2);
+            color: white;
+            text-decoration: none;
+            padding: 15px 25px;
+            border-radius: 8px;
+            font-weight: bold;
+            margin-top: 20px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="icon">🚴‍♂️</div>
+        <h1>Authorization Complete!</h1>
+        <p>Opening FTP Plus app...</p>
+        <a href="#" class="manual-link" id="appLink">Click here if not redirected</a>
+        <div style="margin-top: 30px; font-size: 12px; opacity: 0.8;">
+            Cap Engineering Services<br>FTP Plus - Activity Analysis Tool
+        </div>
+    </div>
+
+    <script>
+        // Extract OAuth parameters and redirect to app
+        const params = new URLSearchParams(window.location.search);
+        const code = params.get('code');
+        const state = params.get('state');
+        
+        if (code && state) {
+            const appUrl = `ftp-plus://oauth/callback?code=${encodeURIComponent(code)}&state=${encodeURIComponent(state)}`;
+            document.getElementById('appLink').href = appUrl;
+            
+            // Immediate redirect
+            window.location.href = appUrl;
+        }
+    </script>
+</body>
+</html>
