@@ -21,7 +21,15 @@ It replaces the "record the pedals on a head unit → phone → Mac → upload" 
 - **Crash-safe:** every second is also written to disk. If the Mac or app dies mid-ride, the next launch offers to save the ride.
 - **Keeps the Mac awake** while recording, and asks before quitting if a ride is in progress.
 
-## Install
+## Download
+
+1. Download the latest **Dual-Recorder-x.y.z.dmg** from [Releases](https://github.com/capceri/ftp-plus-oauth/releases/latest).
+2. Open it and drag **Dual Recorder** into **Applications**.
+3. Open it from Launchpad or Spotlight.
+
+It needs macOS 14 Sonoma or later and runs on Apple Silicon and Intel Macs. Releases are signed and notarized by Apple, so they open without warnings. [RELEASING.md](RELEASING.md) explains how releases are made.
+
+## Build from source
 
 You need macOS 14 or later and either Xcode or the free Command Line Tools (`xcode-select --install`).
 
@@ -76,6 +84,7 @@ Sources/DualRecorderCore   platform-independent logic (unit-tested on macOS and 
   RideJournal.swift          crash-recovery journal
 Sources/DualRecorder       the macOS app (SwiftUI + CoreBluetooth)
 scripts/validate_fit.py    decodes FIT files with Garmin's FIT SDK and sanity-checks them
+scripts/release.sh         signed + notarized DMG (scripts/make_dmg.sh does the packaging)
 ```
 
 ```bash
@@ -85,4 +94,4 @@ python3 -m venv .venv && .venv/bin/pip install garmin-fit-sdk
 .venv/bin/python scripts/validate_fit.py /tmp/fit  # check generated sample files
 ```
 
-GitHub Actions (`.github/workflows/dual-recorder.yml` at the repo root) builds the app on macOS for every push that touches `dual-recorder/`, runs the tests, validates sample FIT files, and attaches a zipped `Dual Recorder.app` to the run.
+GitHub Actions (`.github/workflows/dual-recorder.yml` at the repo root) builds the app on macOS for every push that touches `dual-recorder/`. It runs the tests, validates sample FIT files, builds a universal app, and attaches an unsigned test DMG to the run. Pushing a `dual-recorder-v*` tag runs `.github/workflows/dual-recorder-release.yml`, which builds the signed, notarized DMG and publishes it as a release (see [RELEASING.md](RELEASING.md)).

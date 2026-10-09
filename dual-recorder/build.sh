@@ -6,7 +6,12 @@
 #
 # Needs Xcode or the Command Line Tools (xcode-select --install).
 # The app is signed ad hoc by default. To sign with your own certificate instead, run e.g.
-#   SIGN_IDENTITY="Apple Development: Your Name (TEAMID)" ./build.sh
+#   SIGN_IDENTITY="Developer ID Application: Your Name (TEAMID)" ./build.sh
+#
+# Optional settings (used by scripts/release.sh):
+#   UNIVERSAL=1          build for Apple Silicon and Intel (needs full Xcode)
+#   VERSION=1.2.0        version shown in Finder and About
+#   BUILD_NUMBER=42      internal build number
 set -euo pipefail
 cd "$(dirname "$0")"
 
@@ -21,9 +26,14 @@ if ! xcrun --find swift >/dev/null 2>&1; then
     exit 1
 fi
 
+ARCH_ARGS=()
+if [[ "${UNIVERSAL:-0}" == "1" ]]; then
+    ARCH_ARGS=(--arch arm64 --arch x86_64)
+fi
+
 echo "▸ Compiling…"
-swift build -c release --product "$PRODUCT"
-BIN_DIR="$(swift build -c release --show-bin-path)"
+swift build -c release --product "$PRODUCT" ${ARCH_ARGS[@]+"${ARCH_ARGS[@]}"}
+BIN_DIR="$(swift build -c release ${ARCH_ARGS[@]+"${ARCH_ARGS[@]}"} --show-bin-path)"
 
 echo "▸ Assembling $APP_NAME.app…"
 rm -rf "$APP"
@@ -31,9 +41,21 @@ mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
 cp "$BIN_DIR/$PRODUCT" "$APP/Contents/MacOS/$PRODUCT"
 cp Resources/Info.plist "$APP/Contents/Info.plist"
 cp Resources/AppIcon.icns "$APP/Contents/Resources/AppIcon.icns"
+if [[ -n "${VERSION:-}" ]]; then
+    plutil -replace CFBundleShortVersionString -string "$VERSION" "$APP/Contents/Info.plist"
+fi
+if [[ -n "${BUILD_NUMBER:-}" ]]; then
+    plutil -replace CFBundleVersion -string "$BUILD_NUMBER" "$APP/Contents/Info.plist"
+fi
 
-echo "▸ Signing…"
-codesign --force --sign "${SIGN_IDENTITY:--}" "$APP"
+IDENTITY="${SIGN_IDENTITY:--}"
+echo "▸ Signing ($([[ "$IDENTITY" == "-" ]] && echo "ad hoc" || echo "$IDENTITY"))…"
+if [[ "$IDENTITY" == "-" ]]; then
+    codesign --force --sign - "$APP"
+else
+    # Hardened runtime and a secure timestamp are required for notarization.
+    codesign --force --sign "$IDENTITY" --options runtime --timestamp "$APP"
+fi
 
 if (( ! INSTALL )); then
     echo "✓ Built $APP"
