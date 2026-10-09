@@ -1,0 +1,53 @@
+name: Dual Recorder
+
+on:
+  push:
+    paths:
+      - "dual-recorder/**"
+      - ".github/workflows/dual-recorder.yml"
+  workflow_dispatch:
+
+defaults:
+  run:
+    working-directory: dual-recorder
+
+jobs:
+  macos:
+    runs-on: macos-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Toolchain
+        run: |
+          sw_vers
+          swift --version
+
+      - name: Unit tests
+        run: |
+          mkdir -p fit-out
+          FIT_OUTPUT_DIR="$PWD/fit-out" swift test
+
+      - name: Validate FIT files with Garmin's FIT SDK
+        run: |
+          python3 -m venv .venv
+          .venv/bin/pip install --quiet garmin-fit-sdk
+          .venv/bin/python scripts/validate_fit.py fit-out
+
+      - name: Build app
+        run: ./build.sh --no-install
+
+      - name: Check app bundle
+        run: |
+          plutil -lint "build/Dual Recorder.app/Contents/Info.plist"
+          codesign --verify --verbose "build/Dual Recorder.app"
+          file "build/Dual Recorder.app/Contents/MacOS/DualRecorder"
+
+      - name: Package
+        run: ditto -c -k --keepParent "build/Dual Recorder.app" "Dual-Recorder.zip"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Dual-Recorder-app
+          path: dual-recorder/Dual-Recorder.zip
+          retention-days: 14
