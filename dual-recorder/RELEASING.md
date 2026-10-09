@@ -1,5 +1,7 @@
 # Releasing Dual Recorder
 
+> Want an assistant to do this for you? Give Claude Cowork [COWORK_RELEASE_TASK.md](COWORK_RELEASE_TASK.md). It walks through every step below on your Mac, while you type the passwords yourself.
+
 Releases are DMG installers that are signed with your Developer ID and notarized by Apple. Anyone can download one, open it, drag the app into Applications and run it without Gatekeeper warnings. GitHub Actions builds and publishes them when you push a version tag.
 
 ## One-time setup
@@ -22,11 +24,11 @@ Everything secret goes into **GitHub › capceri/ftp-plus-oauth › Settings ›
 **A. Apple ID with an app-specific password (simplest)**
 
 1. At [account.apple.com](https://account.apple.com), go to **Sign-In and Security › App-Specific Passwords** and create one called "Dual Recorder notarization".
-2. Find your Team ID at [developer.apple.com/account](https://developer.apple.com/account) › Membership details.
-3. Add three secrets:
+2. Add two secrets:
    - `APPLE_ID`: your Apple ID email
    - `APPLE_APP_PASSWORD`: the app-specific password
-   - `APPLE_TEAM_ID`: e.g. `AB12CD34EF`
+
+   Your Team ID is taken from the certificate name automatically. If needed, you can set it explicitly with an `APPLE_TEAM_ID` secret.
 
 **B. App Store Connect API key**
 
@@ -50,7 +52,7 @@ git push origin dual-recorder-v1.0.0
 The version (`1.0.0`) is taken from the tag and must go up each release. About 10 minutes later the release appears at
 **https://github.com/capceri/ftp-plus-oauth/releases/latest** with `Dual-Recorder-1.0.0.dmg` attached. Share that link.
 
-You can also create the release on GitHub (**Releases › Draft a new release**, new tag `dual-recorder-v1.0.0`, **Publish**). The workflow then attaches the DMG to it.
+You can also create the release on GitHub (**Releases › Draft a new release**, new tag `dual-recorder-v1.0.0`, **Publish**) and leave the description empty. The workflow attaches the DMG and fills in the install instructions.
 
 ## Building a release on your Mac instead
 

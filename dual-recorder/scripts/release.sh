@@ -6,7 +6,7 @@
 # Needs full Xcode, a "Developer ID Application" certificate in the keychain, and notarization
 # credentials in one of these forms (see RELEASING.md):
 #   NOTARY_PROFILE=name                         a profile saved with `xcrun notarytool store-credentials`
-#   APPLE_ID, APPLE_APP_PASSWORD, APPLE_TEAM_ID  Apple ID with an app-specific password
+#   APPLE_ID, APPLE_APP_PASSWORD [, APPLE_TEAM_ID]  Apple ID with an app-specific password
 #   NOTARY_API_KEY (contents of the .p8), NOTARY_API_KEY_ID, NOTARY_API_ISSUER_ID
 # SIGN_IDENTITY selects the certificate; by default the first Developer ID Application one is used.
 set -euo pipefail
@@ -37,7 +37,9 @@ elif [[ -n "${NOTARY_API_KEY:-}" ]]; then
     printf '%s\n' "$NOTARY_API_KEY" > "$WORK/AuthKey.p8"
     NOTARY_AUTH=(--key "$WORK/AuthKey.p8" --key-id "${NOTARY_API_KEY_ID:?}" --issuer "${NOTARY_API_ISSUER_ID:?}")
 elif [[ -n "${APPLE_ID:-}" ]]; then
-    NOTARY_AUTH=(--apple-id "$APPLE_ID" --password "${APPLE_APP_PASSWORD:?}" --team-id "${APPLE_TEAM_ID:?}")
+    # The team ID defaults to the one in brackets at the end of the certificate name.
+    TEAM_ID="${APPLE_TEAM_ID:-$(sed -n 's/.*(\([A-Z0-9]\{10\}\))$/\1/p' <<<"$SIGN_IDENTITY")}"
+    NOTARY_AUTH=(--apple-id "$APPLE_ID" --password "${APPLE_APP_PASSWORD:?}" --team-id "${TEAM_ID:?Set APPLE_TEAM_ID}")
 else
     echo "No notarization credentials. Set NOTARY_PROFILE, APPLE_ID/APPLE_APP_PASSWORD/APPLE_TEAM_ID or NOTARY_API_KEY/… (see RELEASING.md)." >&2
     exit 1
