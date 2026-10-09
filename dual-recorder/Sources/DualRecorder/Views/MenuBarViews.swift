@@ -17,7 +17,8 @@ struct MenuBarLabel: View {
     }
 
     private var labelText: String {
-        let meter = sensors.sensors.first { $0.kind == .powerMeter } ?? sensors.sensors.first { $0.kind.measuresPower }
+        let recorded = sensors.sensors.filter(\.isEnabled)
+        let meter = recorded.first { $0.kind == .powerMeter } ?? recorded.first { $0.kind.measuresPower }
         if let meter, let watts = recorder.displayPower(for: meter.id.uuidString) {
             return "\(watts) W"
         }
@@ -45,11 +46,15 @@ struct MenuBarContent: View {
                 }
             }
 
-            if sensors.sensors.isEmpty {
-                Text("No sensors added yet.").foregroundStyle(Color.secondary)
-            }
-            ForEach(sensors.sensors) { sensor in
+            ConnectionSummaryLine()
+            ForEach(sensors.sensors.filter(\.isEnabled)) { sensor in
                 MenuBarSensorRow(sensor: sensor)
+            }
+            let switchedOff = sensors.sensors.filter { !$0.isEnabled }.count
+            if switchedOff > 0 {
+                Text("\(switchedOff) more switched off (not recorded)")
+                    .font(.caption)
+                    .foregroundStyle(Color.secondary)
             }
             if let live = recorder.liveComparison {
                 Text("Gap (10 s): \(comparisonText(live))")
@@ -82,6 +87,7 @@ struct MenuBarContent: View {
                 }
                 .buttonStyle(.borderedProminent)
                 .tint(.green)
+                .disabled(!recorder.hasRecordableSensors)
             }
 
             HStack {
@@ -99,18 +105,47 @@ struct MenuBarContent: View {
     }
 }
 
-struct MenuBarSensorRow: View {
-    @ObservedObject var sensor: Sensor
+/// "2 of 3 sensors connected" with a coloured icon, for the menu bar drop-down.
+struct ConnectionSummaryLine: View {
+    @EnvironmentObject private var sensors: SensorManager
     @EnvironmentObject private var recorder: RecordingController
 
     var body: some View {
+        let bluetoothOn = sensors.bluetoothState == .poweredOn
+        let enabled = sensors.sensors.filter(\.isEnabled)
+        let live = enabled.filter { $0.linkStatus(bluetoothOn: bluetoothOn) == .live }.count
+        let allLive = !enabled.isEmpty && live == enabled.count
+        Label {
+            Text(text(enabled: enabled.count, live: live, bluetoothOn: bluetoothOn))
+        } icon: {
+            Image(systemName: allLive ? "checkmark.circle.fill" : "exclamationmark.circle.fill")
+                .foregroundStyle(allLive ? Color.green : Color.orange)
+        }
+        .font(.callout)
+    }
+
+    private func text(enabled: Int, live: Int, bluetoothOn: Bool) -> String {
+        if enabled == 0 { return "No sensors switched on" }
+        if !bluetoothOn { return "Bluetooth is off" }
+        return "\(live) of \(enabled) connected"
+    }
+}
+
+struct MenuBarSensorRow: View {
+    @ObservedObject var sensor: Sensor
+    @EnvironmentObject private var sensors: SensorManager
+    @EnvironmentObject private var recorder: RecordingController
+
+    var body: some View {
+        let status = sensor.linkStatus(bluetoothOn: sensors.bluetoothState == .poweredOn)
         HStack(spacing: 8) {
             Image(systemName: sensor.kind.symbol)
                 .foregroundStyle(sensor.kind.tint)
                 .frame(width: 18)
             Circle()
-                .fill(sensor.state == .connected && sensor.isLive(within: 5) ? Color.green : Color.orange)
-                .frame(width: 6, height: 6)
+                .fill(status.color)
+                .frame(width: 7, height: 7)
+                .help(status.label)
             Text(sensor.displayName).lineLimit(1)
             Spacer()
             Text(value)

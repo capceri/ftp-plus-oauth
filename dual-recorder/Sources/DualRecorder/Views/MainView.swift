@@ -104,6 +104,8 @@ struct RecoveryBanner: View {
 // MARK: - Recording
 
 struct RecordingPanel: View {
+    // Observed so the Start button reacts as soon as a record switch changes.
+    @EnvironmentObject private var sensors: SensorManager
     @EnvironmentObject private var recorder: RecordingController
     @State private var confirmingStop = false
 
@@ -130,6 +132,8 @@ struct RecordingPanel: View {
                 TextField("Event name (optional, added to the file name)", text: $recorder.eventName)
                     .textFieldStyle(.roundedBorder)
 
+                ConnectionSummary()
+
                 LiveTiles()
 
                 if recorder.isRecording {
@@ -152,6 +156,7 @@ struct RecordingPanel: View {
                     .buttonStyle(.borderedProminent)
                     .tint(.green)
                     .controlSize(.large)
+                    .disabled(!recorder.hasRecordableSensors)
                 }
 
                 HStack {
@@ -180,10 +185,12 @@ struct LiveTiles: View {
     @EnvironmentObject private var recorder: RecordingController
 
     var body: some View {
-        let powerSensors = sensors.sensors.filter { $0.kind.measuresPower }
-        let heartRateSensor = sensors.sensors.first { $0.kind == .heartRate }
+        let powerSensors = sensors.sensors.filter { $0.isEnabled && $0.kind.measuresPower }
+        let heartRateSensor = sensors.sensors.first { $0.isEnabled && $0.kind == .heartRate }
         if powerSensors.isEmpty && heartRateSensor == nil {
-            Text("Add your sensors below to see live data here.")
+            Text(sensors.sensors.isEmpty
+                 ? "Add your sensors below to see live data here."
+                 : "Switch on the sensors you want to record below.")
                 .foregroundStyle(Color.secondary)
                 .frame(maxWidth: .infinity, alignment: .center)
                 .padding(.vertical, 12)

@@ -85,7 +85,7 @@ final class SensorManager: NSObject, ObservableObject {
 
     func add(_ device: DiscoveredDevice) {
         guard !sensors.contains(where: { $0.id == device.id }) else { return }
-        let sensor = Sensor(saved: SavedSensor(id: device.id, name: device.name, nickname: "", kind: device.kind))
+        let sensor = Sensor(saved: SavedSensor(id: device.id, name: device.name, kind: device.kind))
         sensor.peripheral = scannedPeripherals[device.id]
         sensors.append(sensor)
         discovered.removeAll { $0.id == device.id }
@@ -99,6 +99,20 @@ final class SensorManager: NSObject, ObservableObject {
         }
         sensors.removeAll { $0.id == sensor.id }
         save()
+    }
+
+    /// The record switch. Off disconnects the sensor (freeing it for other devices) and leaves it
+    /// out of rides; on reconnects it.
+    func setEnabled(_ enabled: Bool, for sensor: Sensor) {
+        guard sensor.isEnabled != enabled else { return }
+        sensor.isEnabled = enabled
+        save()
+        objectWillChange.send()
+        if enabled {
+            connect(sensor)
+        } else {
+            disconnect(sensor)
+        }
     }
 
     func rename(_ sensor: Sensor, to nickname: String) {
@@ -135,7 +149,7 @@ final class SensorManager: NSObject, ObservableObject {
     // MARK: Connecting
 
     private func connect(_ sensor: Sensor) {
-        guard central.state == .poweredOn else { return }
+        guard sensor.isEnabled, central.state == .poweredOn else { return }
         if sensor.peripheral == nil {
             sensor.peripheral = central.retrievePeripherals(withIdentifiers: [sensor.id]).first
         }
@@ -150,8 +164,21 @@ final class SensorManager: NSObject, ObservableObject {
     }
 
     private func connectAllSaved() {
-        for sensor in sensors where sensor.state == .disconnected {
+        for sensor in sensors where sensor.isEnabled && sensor.state == .disconnected {
             connect(sensor)
+        }
+    }
+
+    private func disconnect(_ sensor: Sensor) {
+        if sensor.zeroOffset == .inProgress {
+            finishZeroOffset(sensor, .idle)
+        }
+        sensor.state = .disconnected
+        sensor.lastDataAt = nil
+        if let peripheral = sensor.peripheral, central.state == .poweredOn {
+            unsubscribeAll(peripheral)
+            // Cancels a pending connection too. Other apps (Zwift) keep their own link.
+            central.cancelPeripheralConnection(peripheral)
         }
     }
 
@@ -234,7 +261,7 @@ final class SensorManager: NSObject, ObservableObject {
     // MARK: Data
 
     private func deliver(_ reading: SensorReading, from sensor: Sensor) {
-        guard !reading.isEmpty else { return }
+        guard sensor.isEnabled, !reading.isEmpty else { return }
         let now = Date()
         sensor.lastDataAt = now
         onReading?(sensor, reading, now)
@@ -268,7 +295,8 @@ extension SensorManager: CBCentralManagerDelegate {
     }
 
     func centralManager(_ central: CBCentralManager, didConnect peripheral: CBPeripheral) {
-        guard let sensor = sensor(for: peripheral) else {
+        // Forgotten, or switched off while the connection was pending.
+        guard let sensor = sensor(for: peripheral), sensor.isEnabled else {
             central.cancelPeripheralConnection(peripheral)
             return
         }

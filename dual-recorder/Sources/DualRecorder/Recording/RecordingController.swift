@@ -83,6 +83,11 @@ final class RecordingController: ObservableObject {
 
     var isRecording: Bool { phase == .recording }
 
+    /// At least one sensor has its record switch on.
+    var hasRecordableSensors: Bool {
+        sensors.sensors.contains { $0.isEnabled }
+    }
+
     var elapsed: TimeInterval {
         guard let startedAt, phase == .recording else { return 0 }
         return max(0, Date().timeIntervalSince(startedAt))
@@ -127,6 +132,10 @@ final class RecordingController: ObservableObject {
     }
 
     private func handle(_ sample: SecondSample) {
+        // Only sensors that are still added and switched on count, even for a reading that
+        // arrived just before one was switched off or forgotten.
+        let recordable = Set(sensors.sensors.filter(\.isEnabled).map(\.id.uuidString))
+        let sample = sample.keeping(sources: recordable)
         recent.append(sample)
         if recent.count > 30 { recent.removeFirst(recent.count - 30) }
 
@@ -257,7 +266,7 @@ final class RecordingController: ObservableObject {
 
         // Saved sensors that haven't delivered anything a minute into the ride.
         guard let startedAt, now.timeIntervalSince(startedAt) > 60 else { return }
-        for sensor in sensors.sensors {
+        for sensor in sensors.sensors where sensor.isEnabled {
             let id = sensor.id.uuidString
             guard !noDataWarned.contains(id), !rideSources.contains(where: { $0.id == id }) else { continue }
             noDataWarned.insert(id)

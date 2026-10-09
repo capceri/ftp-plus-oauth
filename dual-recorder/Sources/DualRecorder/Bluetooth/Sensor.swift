@@ -33,14 +33,6 @@ enum GATT {
     }
 }
 
-/// Sensor details kept between launches.
-struct SavedSensor: Codable {
-    var id: UUID
-    var name: String
-    var nickname: String
-    var kind: SensorKind
-}
-
 /// A sensor the user added. Holds connection state, the latest values and zero-offset status.
 final class Sensor: ObservableObject, Identifiable {
     enum ConnectionState {
@@ -54,10 +46,23 @@ final class Sensor: ObservableObject, Identifiable {
         case failed(String)
     }
 
+    /// What the connection indicator shows.
+    enum LinkStatus: Equatable {
+        /// Switched off: not connected, not recorded.
+        case off
+        case bluetoothUnavailable
+        /// Waiting for the sensor to come into range or wake up.
+        case searching
+        case connectedNoData
+        case live
+    }
+
     let id: UUID
     @Published var advertisedName: String
     @Published var nickname: String
     @Published var kind: SensorKind
+    /// Record switch. When off the sensor is disconnected and left out of rides.
+    @Published var isEnabled: Bool
     @Published var state: ConnectionState = .disconnected
     @Published var battery: Int?
     @Published var zeroOffset: ZeroOffsetState = .idle
@@ -76,6 +81,7 @@ final class Sensor: ObservableObject, Identifiable {
         advertisedName = saved.name
         nickname = saved.nickname
         kind = saved.kind
+        isEnabled = saved.isEnabled
     }
 
     var displayName: String {
@@ -88,13 +94,24 @@ final class Sensor: ObservableObject, Identifiable {
     }
 
     var saved: SavedSensor {
-        SavedSensor(id: id, name: advertisedName, nickname: nickname, kind: kind)
+        SavedSensor(id: id, name: advertisedName, nickname: nickname, kind: kind, isEnabled: isEnabled)
     }
 
     /// True if the sensor delivered data within `seconds`.
     func isLive(within seconds: TimeInterval = 5, now: Date = Date()) -> Bool {
         guard state == .connected, let last = lastDataAt else { return false }
         return now.timeIntervalSince(last) <= seconds
+    }
+
+    func linkStatus(bluetoothOn: Bool, now: Date = Date()) -> LinkStatus {
+        guard isEnabled else { return .off }
+        guard bluetoothOn else { return .bluetoothUnavailable }
+        switch state {
+        case .connected:
+            return isLive(within: 5, now: now) ? .live : .connectedNoData
+        case .connecting, .disconnected:
+            return .searching
+        }
     }
 }
 

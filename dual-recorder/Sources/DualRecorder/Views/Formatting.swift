@@ -36,20 +36,23 @@ extension SensorKind {
     }
 }
 
-extension Sensor.ConnectionState {
+extension Sensor.LinkStatus {
     var label: String {
         switch self {
-        case .connected: return "Connected"
-        case .connecting: return "Waiting for sensor…"
-        case .disconnected: return "Not connected"
+        case .off: return "Off"
+        case .bluetoothUnavailable: return "Bluetooth off"
+        case .searching: return "Searching…"
+        case .connectedNoData: return "Connected · no data"
+        case .live: return "Connected"
         }
     }
 
     var color: Color {
         switch self {
-        case .connected: return .green
-        case .connecting: return .yellow
-        case .disconnected: return .secondary
+        case .off, .bluetoothUnavailable: return .gray
+        case .searching: return .yellow
+        case .connectedNoData: return .orange
+        case .live: return .green
         }
     }
 }

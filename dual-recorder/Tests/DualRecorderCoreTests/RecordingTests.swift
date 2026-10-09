@@ -180,3 +180,27 @@ final class ExportTests: XCTestCase {
         XCTAssertEqual(second.map(\.lastPathComponent), ["2025-10-09 1830 ZRL Race - Assioma (2).fit"])
     }
 }
+
+final class SavedSensorTests: XCTestCase {
+    func testSensorsSavedBeforeTheRecordSwitchStayEnabled() throws {
+        // Exactly what version 1.0 wrote to UserDefaults.
+        let json = #"[{"id":"6F9619FF-8B86-D011-B42D-00C04FC964FF","name":"ASSIOMA48023","nickname":"Pedals","kind":"powerMeter"}]"#
+        let sensors = try JSONDecoder().decode([SavedSensor].self, from: Data(json.utf8))
+        XCTAssertEqual(sensors.count, 1)
+        XCTAssertEqual(sensors[0].nickname, "Pedals")
+        XCTAssertEqual(sensors[0].kind, .powerMeter)
+        XCTAssertTrue(sensors[0].isEnabled)
+    }
+
+    func testRecordSwitchRoundTrips() throws {
+        let saved = SavedSensor(id: UUID(), name: "KICKR", kind: .trainer, isEnabled: false)
+        let decoded = try JSONDecoder().decode(SavedSensor.self, from: JSONEncoder().encode(saved))
+        XCTAssertEqual(decoded, saved)
+    }
+
+    func testKeepingOnlySelectedSources() {
+        let sample = SecondSample(time: 5, values: ["a": SourceValues(power: 100), "b": SourceValues(power: 200)])
+        XCTAssertEqual(sample.keeping(sources: ["b"]), SecondSample(time: 5, values: ["b": SourceValues(power: 200)]))
+        XCTAssertEqual(sample.keeping(sources: []).values.count, 0)
+    }
+}

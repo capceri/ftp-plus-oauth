@@ -21,6 +21,40 @@ public enum SensorKind: String, Codable, CaseIterable, Sendable {
     }
 }
 
+/// A sensor the user added, as stored between launches.
+public struct SavedSensor: Codable, Equatable, Sendable {
+    public var id: UUID
+    /// Advertised Bluetooth name.
+    public var name: String
+    /// User-chosen name; empty means "use the Bluetooth name".
+    public var nickname: String
+    public var kind: SensorKind
+    /// Whether the sensor is connected and recorded.
+    public var isEnabled: Bool
+
+    public init(id: UUID, name: String, nickname: String = "", kind: SensorKind, isEnabled: Bool = true) {
+        self.id = id
+        self.name = name
+        self.nickname = nickname
+        self.kind = kind
+        self.isEnabled = isEnabled
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case id, name, nickname, kind, isEnabled
+    }
+
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = try c.decode(UUID.self, forKey: .id)
+        name = try c.decode(String.self, forKey: .name)
+        nickname = try c.decodeIfPresent(String.self, forKey: .nickname) ?? ""
+        kind = try c.decode(SensorKind.self, forKey: .kind)
+        // Sensors saved before the record switch existed were always recorded.
+        isEnabled = try c.decodeIfPresent(Bool.self, forKey: .isEnabled) ?? true
+    }
+}
+
 /// Identifies a sensor that contributed data to a ride.
 public struct SourceInfo: Codable, Equatable, Hashable, Sendable {
     /// CoreBluetooth peripheral identifier.
@@ -97,6 +131,11 @@ public struct SecondSample: Codable, Equatable, Sendable {
     public init(time: Int64, values: [String: SourceValues] = [:]) {
         self.time = time
         self.values = values
+    }
+
+    /// The same second with only the given sources' values.
+    public func keeping(sources ids: Set<String>) -> SecondSample {
+        SecondSample(time: time, values: values.filter { ids.contains($0.key) })
     }
 
     enum CodingKeys: String, CodingKey {

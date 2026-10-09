@@ -57,21 +57,27 @@ struct SensorRow: View {
                 .font(.title2)
                 .foregroundStyle(sensor.kind.tint)
                 .frame(width: 30)
-            VStack(alignment: .leading, spacing: 3) {
+                .opacity(sensor.isEnabled ? 1 : 0.4)
+            VStack(alignment: .leading, spacing: 4) {
                 HStack(spacing: 6) {
                     Text(sensor.displayName).font(.body.weight(.medium))
                     Text(sensor.kind.label)
                         .font(.caption)
                         .foregroundStyle(Color.secondary)
                 }
-                HStack(spacing: 6) {
-                    Circle().fill(statusColor).frame(width: 7, height: 7)
-                    Text(statusText).font(.caption).foregroundStyle(Color.secondary)
-                    if let battery = sensor.battery {
+                .opacity(sensor.isEnabled ? 1 : 0.55)
+                HStack(spacing: 8) {
+                    StatusBadge(status: status)
+                    if sensor.isEnabled, let battery = sensor.battery {
                         Label("\(battery)%", systemImage: batterySymbol(battery))
                             .font(.caption)
                             .foregroundStyle(battery <= 15 ? Color.red : Color.secondary)
                     }
+                }
+                if let hint {
+                    Text(hint)
+                        .font(.caption)
+                        .foregroundStyle(Color.secondary)
                 }
                 if let zero = zeroOffsetMessage {
                     Text(zero.text)
@@ -81,14 +87,22 @@ struct SensorRow: View {
                 }
             }
             Spacer()
-            Text(liveText)
-                .font(.system(.title3, design: .rounded).weight(.medium))
-                .monospacedDigit()
-            if sensor.kind == .powerMeter {
+            if sensor.isEnabled {
+                Text(liveText)
+                    .font(.system(.title3, design: .rounded).weight(.medium))
+                    .monospacedDigit()
+            }
+            if sensor.kind == .powerMeter && sensor.isEnabled {
                 Button("Zero Offset") { sensors.zeroOffset(sensor) }
                     .disabled(sensor.state != .connected || sensor.zeroOffset == .inProgress)
                     .help("Calibrate the power meter. Unclip, keep the cranks still, then click.")
             }
+            Toggle("Record", isOn: Binding(get: { sensor.isEnabled },
+                                           set: { sensors.setEnabled($0, for: sensor) }))
+                .toggleStyle(.switch)
+                .labelsHidden()
+                .disabled(recorder.isRecording)
+                .help(toggleHelp)
             Menu {
                 Button("Rename…") {
                     draftName = sensor.displayName
@@ -100,9 +114,12 @@ struct SensorRow: View {
                         Text("Power meter (pedals, cranks…)").tag(SensorKind.powerMeter)
                         Text("Smart trainer").tag(SensorKind.trainer)
                     }
+                    // Changing it reconnects the sensor, which would leave a gap in a ride.
+                    .disabled(recorder.isRecording)
                 }
                 Divider()
                 Button("Forget Sensor…", role: .destructive) { confirmingForget = true }
+                    .disabled(recorder.isRecording)
             } label: {
                 Image(systemName: "ellipsis.circle")
             }
@@ -122,22 +139,30 @@ struct SensorRow: View {
         .confirmationDialog("Forget \(sensor.displayName)?", isPresented: $confirmingForget) {
             Button("Forget", role: .destructive) { sensors.forget(sensor) }
         } message: {
-            Text("It will be disconnected and no longer recorded. You can add it again later.")
+            Text("It will be disconnected and removed from the list. You can add it again later.")
         }
     }
 
-    private var isLive: Bool {
-        sensor.isLive(within: 5)
+    private var status: Sensor.LinkStatus {
+        sensor.linkStatus(bluetoothOn: sensors.bluetoothState == .poweredOn)
     }
 
-    private var statusColor: Color {
-        sensor.state == .connected && !isLive ? .orange : sensor.state.color
+    private var hint: String? {
+        switch status {
+        case .off:
+            return "Not recorded. Switch on to connect it."
+        case .searching where sensor.kind == .powerMeter:
+            return "Turn the cranks to wake the pedals."
+        default:
+            return nil
+        }
     }
 
-    private var statusText: String {
-        if sensor.state == .connected && !isLive { return "Connected · no data yet" }
-        if sensor.state == .connecting && sensor.kind == .powerMeter { return "Waiting… turn the cranks to wake it" }
-        return sensor.state.label
+    private var toggleHelp: String {
+        if recorder.isRecording { return "Locked while recording." }
+        return sensor.isEnabled
+            ? "Recorded. Switch off to disconnect it and leave it out of rides."
+            : "Not recorded. Switch on to connect and record it."
     }
 
     private var liveText: String {
@@ -151,6 +176,7 @@ struct SensorRow: View {
     }
 
     private var zeroOffsetMessage: (text: String, color: Color)? {
+        guard sensor.isEnabled else { return nil }
         switch sensor.zeroOffset {
         case .idle:
             return nil
@@ -171,6 +197,78 @@ struct SensorRow: View {
         case ..<88: return "battery.75"
         default: return "battery.100"
         }
+    }
+}
+
+/// Coloured capsule showing whether a sensor is connected.
+struct StatusBadge: View {
+    let status: Sensor.LinkStatus
+
+    var body: some View {
+        HStack(spacing: 5) {
+            Circle()
+                .fill(status.color)
+                .frame(width: 7, height: 7)
+            Text(status.label)
+        }
+        .font(.caption.weight(.medium))
+        .foregroundStyle(status == .off ? Color.secondary : Color.primary)
+        .padding(.horizontal, 8)
+        .padding(.vertical, 3)
+        .background(Capsule().fill(status.color.opacity(0.16)))
+    }
+}
+
+/// One line above the Start button saying which sensors are connected.
+struct ConnectionSummary: View {
+    @EnvironmentObject private var sensors: SensorManager
+    // Observed so the summary refreshes every second along with the live data.
+    @EnvironmentObject private var recorder: RecordingController
+
+    var body: some View {
+        let bluetoothOn = sensors.bluetoothState == .poweredOn
+        let enabled = sensors.sensors.filter(\.isEnabled)
+        let liveCount = enabled.filter { $0.linkStatus(bluetoothOn: bluetoothOn) == .live }.count
+        let allLive = !enabled.isEmpty && liveCount == enabled.count
+        HStack(spacing: 10) {
+            Image(systemName: allLive ? "checkmark.circle.fill" : "exclamationmark.circle.fill")
+                .foregroundStyle(allLive ? Color.green : Color.orange)
+            Text(sensors.sensors.isEmpty ? "No sensors added yet"
+                 : headline(enabled: enabled.count, live: liveCount, bluetoothOn: bluetoothOn))
+                .font(.callout.weight(.medium))
+            Spacer(minLength: 8)
+            ForEach(enabled) { sensor in
+                SensorChip(sensor: sensor, bluetoothOn: bluetoothOn)
+            }
+        }
+    }
+
+    private func headline(enabled: Int, live: Int, bluetoothOn: Bool) -> String {
+        if enabled == 0 { return "No sensors switched on to record" }
+        if !bluetoothOn { return "Bluetooth is off" }
+        if live == enabled { return enabled == 1 ? "Sensor connected" : "All \(enabled) sensors connected" }
+        return "\(live) of \(enabled) sensors connected"
+    }
+}
+
+struct SensorChip: View {
+    @ObservedObject var sensor: Sensor
+    let bluetoothOn: Bool
+
+    var body: some View {
+        let status = sensor.linkStatus(bluetoothOn: bluetoothOn)
+        HStack(spacing: 4) {
+            Circle()
+                .fill(status.color)
+                .frame(width: 7, height: 7)
+            Text(sensor.displayName)
+                .lineLimit(1)
+        }
+        .font(.caption)
+        .padding(.horizontal, 7)
+        .padding(.vertical, 3)
+        .background(Capsule().fill(status.color.opacity(0.16)))
+        .help("\(sensor.displayName): \(status.label)")
     }
 }
 

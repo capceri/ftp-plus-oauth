@@ -9,6 +9,8 @@ It replaces the "record the pedals on a head unit → phone → Mac → upload" 
 ## Features
 
 - **Any standard Bluetooth sensor:** power meters (Cycling Power), heart-rate straps and smart trainers (FTMS, or Cycling Power on older trainers).
+- **Record switch per sensor:** choose which sensors to record. A sensor switched off is disconnected (freeing it for other devices) and left out of rides.
+- **Connection indicator:** each sensor shows *Connected*, *Connected · no data*, *Searching…* or *Off*, and a summary line above Start ("All 3 sensors connected" / "2 of 3 sensors connected") shows at a glance whether you're ready.
 - **Runs alongside Zwift on the same Mac.** Sensors Zwift is already connected to (trainer, HR strap) are shared rather than taken over, and the app never sends anything to the trainer, so Zwift keeps control of resistance.
 - **One FIT file per power source**, e.g. `2026-10-09 1830 ZRL Race - Assioma.fit` and `… - KICKR.fit`. Each includes heart rate. Power, cadence and L/R balance are recorded every second.
 - **Zero offset** button for power meters (standard Bluetooth offset compensation, like a head unit does).
@@ -40,9 +42,9 @@ On first launch macOS asks for:
 
 ## Using it
 
-1. **Add sensors (once):** turn the Assioma cranks to wake them, click **Add Sensor…** and add the pedals, plus your HR strap and trainer if you want those recorded. Sensors are remembered and reconnect automatically whenever they're awake. Use the **⋯** menu on a sensor to rename it (the name goes into the file name), mark a power sensor as *power meter* or *smart trainer*, or forget it.
+1. **Add sensors (once):** turn the Assioma cranks to wake them, click **Add Sensor…** and add the pedals, plus your HR strap and trainer if you want those recorded. Sensors are remembered and reconnect automatically whenever they're awake. Use each sensor's switch to choose whether it's recorded (switches are locked while recording). Use the **⋯** menu on a sensor to rename it (the name goes into the file name), mark a power sensor as *power meter* or *smart trainer*, or forget it.
 2. **Before the event:** unclip, keep the cranks still and click **Zero Offset** on the pedals.
-3. **Start recording** from the window or the menu bar. Optionally type the event name first (or during the ride); it's added to the file name.
+3. **Check the connection line** above Start shows all your sensors connected, then **start recording** from the window or the menu bar. Optionally type the event name first (or during the ride); it's added to the file name.
 4. **Ride.** The menu bar shows live pedal power. If a sensor drops out you'll hear a warning.
 5. **Stop & Save.** The FIT files appear in `~/Documents` and a summary pops up. Upload the **Assioma** file wherever the event asks for your dual recording (e.g. ZwiftPower).
 
