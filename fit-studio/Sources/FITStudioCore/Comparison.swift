@@ -1,7 +1,7 @@
 import Foundation
 
 /// How one file's values differ from a reference file's over the seconds both have data.
-public struct ComparisonResult: Sendable, Equatable {
+public struct SeriesComparison: Sendable, Equatable {
     public var overlapSeconds: Int
     public var referenceAverage: Double
     public var otherAverage: Double
@@ -75,7 +75,7 @@ public enum Comparator {
     }
 
     public static func compare(reference: [Double?], other: [Double?], shift: Int, ignoreZeros: Bool = false,
-                               bandCount: Int = 5) -> ComparisonResult? {
+                               bandCount: Int = 5) -> SeriesComparison? {
         let pairs = pairs(reference: reference, other: other, shift: shift, ignoreZeros: ignoreZeros)
         guard !pairs.isEmpty else { return nil }
         let n = Double(pairs.count)
@@ -96,7 +96,7 @@ public enum Comparator {
         }
         let correlation = varianceA > 0 && varianceB > 0 ? covariance / (varianceA * varianceB).squareRoot() : nil
         let slope = varianceA > 0 ? covariance / varianceA : nil
-        return ComparisonResult(overlapSeconds: pairs.count, referenceAverage: meanA, otherAverage: meanB,
+        return SeriesComparison(overlapSeconds: pairs.count, referenceAverage: meanA, otherAverage: meanB,
                                 meanDifference: sumDiff / n, meanAbsoluteDifference: sumAbs / n,
                                 rmsDifference: (sumSquares / n).squareRoot(), correlation: correlation,
                                 slope: slope, intercept: slope.map { meanB - $0 * meanA },

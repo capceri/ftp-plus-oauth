@@ -10,7 +10,7 @@ final class ChartCursor: ObservableObject {
     @Published var selection: ClosedRange<Double>?
 }
 
-enum ChartXAxis: String, CaseIterable, Identifiable {
+enum XAxisMode: String, CaseIterable, Identifiable {
     case time, distance
     var id: String { rawValue }
 }
@@ -57,7 +57,7 @@ struct ChartsView: View {
     @AppStorage(SettingsKey.unitSystem) private var system: UnitSystem = .metric
     @AppStorage("chartChannels") private var savedChannels = "power,heart_rate,cadence,speed,altitude"
     @AppStorage("chartSmoothing") private var smoothing = 0
-    @State private var xAxis: ChartXAxis = .time
+    @State private var xAxis: XAxisMode = .time
     @State private var zoom: ClosedRange<Double>?
     @State private var showOriginal = true
     @State private var cursor = ChartCursor()
@@ -73,7 +73,7 @@ struct ChartsView: View {
 
     private var distanceAvailable: Bool { activity.channel(.distance) != nil }
 
-    private var effectiveAxis: ChartXAxis { distanceAvailable ? xAxis : .time }
+    private var effectiveAxis: XAxisMode { distanceAvailable ? xAxis : .time }
 
     var body: some View {
         let xs = xValues
@@ -132,8 +132,8 @@ struct ChartsView: View {
             }
             HStack(spacing: 16) {
                 Picker("X axis", selection: $xAxis) {
-                    Text("Time").tag(ChartXAxis.time)
-                    Text("Distance").tag(ChartXAxis.distance)
+                    Text("Time").tag(XAxisMode.time)
+                    Text("Distance").tag(XAxisMode.distance)
                 }
                 .pickerStyle(.segmented)
                 .frame(width: 180)
@@ -242,7 +242,7 @@ struct LaneChart: View {
     let lane: Lane
     let domain: ClosedRange<Double>
     let cursor: ChartCursor
-    let axis: ChartXAxis
+    let axis: XAxisMode
     let system: UnitSystem
     let showsXAxis: Bool
 
@@ -276,11 +276,10 @@ struct LaneChart: View {
             .chartXAxis {
                 AxisMarks(values: .automatic(desiredCount: 8)) { value in
                     AxisGridLine()
-                    if showsXAxis {
-                        AxisTick()
-                        AxisValueLabel {
-                            if let x = value.as(Double.self) { Text(xLabel(x)) }
-                        }
+                    AxisTick()
+                    AxisValueLabel {
+                        // Only the bottom lane is labelled; the others share its axis.
+                        if showsXAxis, let x = value.as(Double.self) { Text(xLabel(x)) }
                     }
                 }
             }
@@ -369,7 +368,7 @@ struct SelectionBar: View {
     @ObservedObject var cursor: ChartCursor
     let lanes: [Lane]
     let activity: Activity
-    let axis: ChartXAxis
+    let axis: XAxisMode
     let system: UnitSystem
     let zoomed: Bool
     let onZoom: (ClosedRange<Double>) -> Void

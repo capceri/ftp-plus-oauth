@@ -12,7 +12,7 @@ struct ComparedFile: Identifiable {
     /// other[i] lines up with reference[i + shift] (0 for the reference).
     var shift: Int
     var baseShift: Int
-    var result: ComparisonResult?
+    var result: SeriesComparison?
     var line: [PlotPoint]
     var difference: [PlotPoint]
 }
@@ -325,7 +325,7 @@ struct CompareView: View {
         return abs(percent) < 1 ? .green : abs(percent) < 3 ? .orange : .red
     }
 
-    private func fitText(_ result: ComparisonResult?) -> String {
+    private func fitText(_ result: SeriesComparison?) -> String {
         guard let slope = result?.slope, let intercept = result?.intercept else { return "–" }
         return "×\(Format.number(slope, decimals: 3)) \(intercept >= 0 ? "+" : "−") \(Format.number(abs(intercept), decimals: 1))"
     }
