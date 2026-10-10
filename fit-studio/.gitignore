@@ -1,0 +1,8 @@
+.build/
+build/
+.swiftpm/
+.venv/
+fit-out/
+*.xcodeproj
+xcuserdata/
+.DS_Store

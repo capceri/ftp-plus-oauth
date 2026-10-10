@@ -49,8 +49,8 @@ git tag dual-recorder-v1.0.0
 git push origin dual-recorder-v1.0.0
 ```
 
-The version (`1.0.0`) is taken from the tag and must go up each release. About 10 minutes later the release appears at
-**https://github.com/capceri/ftp-plus-oauth/releases/latest** with `Dual-Recorder-1.0.0.dmg` attached. Share that link.
+The version (`1.0.0`) is taken from the tag and must go up each release. About 10 minutes later the release appears with `Dual-Recorder-1.0.0.dmg` attached. FIT Studio publishes releases in this repository too, so share the Dual Recorder releases link rather than `releases/latest`:
+**https://github.com/capceri/ftp-plus-oauth/releases?q=dual-recorder&expanded=true**
 
 You can also create the release on GitHub (**Releases › Draft a new release**, new tag `dual-recorder-v1.0.0`, **Publish**) and leave the description empty. The workflow attaches the DMG and fills in the install instructions.
 

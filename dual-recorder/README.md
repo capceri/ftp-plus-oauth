@@ -23,7 +23,7 @@ It replaces the "record the pedals on a head unit → phone → Mac → upload" 
 
 ## Download
 
-1. Download the latest **Dual-Recorder-x.y.z.dmg** from [Releases](https://github.com/capceri/ftp-plus-oauth/releases/latest).
+1. Download the latest **Dual-Recorder-x.y.z.dmg** from [Dual Recorder releases](https://github.com/capceri/ftp-plus-oauth/releases?q=dual-recorder&expanded=true).
 2. Open it and drag **Dual Recorder** into **Applications**.
 3. Open it from Launchpad or Spotlight.
 

@@ -1,0 +1,124 @@
+name: FIT Studio release
+
+# Publish a release with a tag like "fit-studio-v1.2.0" (on github.com, with `gh release create`,
+# or just push the tag) to build a signed, notarized DMG and attach it to that release. Running it
+# by hand (Actions › FIT Studio release › Run workflow) builds the DMG and attaches it to the run
+# without publishing, which is handy for checking the signing setup.
+on:
+  push:
+    tags:
+      - "fit-studio-v*"
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version number for the test build (e.g. 1.2.0)"
+        required: true
+        default: "0.0.1"
+
+permissions:
+  contents: write
+
+defaults:
+  run:
+    working-directory: fit-studio
+
+# A release made on github.com can fire both the tag push and the release event; queue the second
+# run so it finds the DMG already attached and stops.
+concurrency:
+  group: fit-studio-release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  release:
+    if: github.event_name != 'release' || startsWith(github.event.release.tag_name, 'fit-studio-v')
+    runs-on: macos-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Version
+        env:
+          INPUT_VERSION: ${{ inputs.version }}
+        run: |
+          if [[ "$GITHUB_REF" == refs/tags/fit-studio-v* ]]; then
+            VERSION="${GITHUB_REF_NAME#fit-studio-v}"
+          else
+            VERSION="$INPUT_VERSION"
+          fi
+          echo "VERSION=$VERSION" >> "$GITHUB_ENV"
+          echo "BUILD_NUMBER=$GITHUB_RUN_NUMBER" >> "$GITHUB_ENV"
+          echo "Building version $VERSION ($GITHUB_RUN_NUMBER)"
+
+      - name: Check whether this release already has its DMG
+        id: existing
+        if: startsWith(github.ref, 'refs/tags/fit-studio-v')
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if gh release view "$GITHUB_REF_NAME" --json assets --jq '.assets[].name' 2>/dev/null \
+              | grep -qx "FIT-Studio-$VERSION.dmg"; then
+            echo "FIT-Studio-$VERSION.dmg is already attached to $GITHUB_REF_NAME; nothing to do."
+            echo "done=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Unit tests
+        if: steps.existing.outputs.done != 'true'
+        run: swift test
+
+      - name: Import signing certificate
+        if: steps.existing.outputs.done != 'true'
+        env:
+          MACOS_CERTIFICATE_P12: ${{ secrets.MACOS_CERTIFICATE_P12 }}
+          MACOS_CERTIFICATE_PASSWORD: ${{ secrets.MACOS_CERTIFICATE_PASSWORD }}
+        run: scripts/ci_import_certificate.sh
+
+      - name: Build, sign, notarize and package
+        if: steps.existing.outputs.done != 'true'
+        env:
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_PASSWORD: ${{ secrets.APPLE_APP_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          NOTARY_API_KEY: ${{ secrets.NOTARY_API_KEY }}
+          NOTARY_API_KEY_ID: ${{ secrets.NOTARY_API_KEY_ID }}
+          NOTARY_API_ISSUER_ID: ${{ secrets.NOTARY_API_ISSUER_ID }}
+        run: scripts/release.sh "$VERSION"
+
+      - uses: actions/upload-artifact@v4
+        if: steps.existing.outputs.done != 'true'
+        with:
+          name: FIT-Studio-${{ env.VERSION }}
+          path: fit-studio/build/FIT-Studio-${{ env.VERSION }}.dmg
+
+      - name: Publish GitHub release
+        if: startsWith(github.ref, 'refs/tags/fit-studio-v') && steps.existing.outputs.done != 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          DMG="build/FIT-Studio-$VERSION.dmg"
+          cat > build/release-notes.md <<EOF
+          ## Install
+
+          1. Download **FIT-Studio-$VERSION.dmg** below.
+          2. Open it and drag **FIT Studio** into **Applications**.
+          3. Open FIT Studio from Launchpad or Spotlight, then drop FIT files on its window (or choose File › Open).
+
+          Needs macOS 14 Sonoma or later, on an Apple Silicon or Intel Mac.
+
+          **Updating:** quit FIT Studio, then drag the new version into Applications and choose *Replace*. Your settings are kept.
+          EOF
+          if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
+            gh release upload "$GITHUB_REF_NAME" "$DMG" --clobber
+            # A release made on github.com without notes gets the install instructions.
+            if [[ -z "$(gh release view "$GITHUB_REF_NAME" --json body --jq .body)" ]]; then
+              gh release edit "$GITHUB_REF_NAME" --notes-file build/release-notes.md
+            fi
+          else
+            gh release create "$GITHUB_REF_NAME" "$DMG" --title "FIT Studio $VERSION" --notes-file build/release-notes.md
+          fi
+
+      - name: Remove signing keychain
+        if: always()
+        run: |
+          if [[ -n "${SIGNING_KEYCHAIN:-}" ]]; then security delete-keychain "$SIGNING_KEYCHAIN" || true; fi
