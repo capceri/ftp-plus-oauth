@@ -1,0 +1,72 @@
+name: FIT Studio
+
+on:
+  push:
+    paths:
+      - "fit-studio/**"
+      - ".github/workflows/fit-studio.yml"
+  workflow_dispatch:
+
+defaults:
+  run:
+    working-directory: fit-studio
+
+jobs:
+  macos:
+    runs-on: macos-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Toolchain
+        run: |
+          sw_vers
+          swift --version
+
+      - name: Unit tests
+        run: |
+          mkdir -p fit-out
+          FIT_OUTPUT_DIR="$PWD/fit-out" swift test
+
+      - name: Check adjusted FIT files with Garmin's FIT SDK
+        run: |
+          python3 -m venv .venv
+          .venv/bin/pip install --quiet garmin-fit-sdk
+          .venv/bin/python scripts/validate_fit.py fit-out
+
+      - name: Command-line tool
+        run: |
+          swift build -c release --product fitstudio
+          BIN="$(swift build -c release --show-bin-path)/fitstudio"
+          "$BIN" info Tests/FITStudioCoreTests/Fixtures/garmin-sdk-ride.fit
+          "$BIN" adjust Tests/FITStudioCoreTests/Fixtures/garmin-sdk-ride.fit fit-out/cli-adjusted.fit --power 2.5
+          "$BIN" compare Tests/FITStudioCoreTests/Fixtures/garmin-sdk-ride.fit fit-out/cli-adjusted.fit --auto-align
+
+      - name: Build app (Apple Silicon + Intel)
+        run: UNIVERSAL=1 VERSION=0.0.$GITHUB_RUN_NUMBER BUILD_NUMBER=$GITHUB_RUN_NUMBER ./build.sh --no-install
+
+      - name: Check app bundle
+        run: |
+          plutil -lint "build/FIT Studio.app/Contents/Info.plist"
+          codesign --verify --verbose "build/FIT Studio.app"
+          ARCHS="$(lipo -archs "build/FIT Studio.app/Contents/MacOS/FITStudio")"
+          echo "Architectures: $ARCHS"
+          [[ "$ARCHS" == *arm64* && "$ARCHS" == *x86_64* ]]
+
+      # Unsigned: checks the installer packaging on every push. Signed releases come from
+      # fit-studio-release.yml.
+      - name: Build DMG (unsigned)
+        run: |
+          scripts/make_dmg.sh "build/FIT Studio.app" build/FIT-Studio-unsigned.dmg
+          hdiutil verify build/FIT-Studio-unsigned.dmg
+          MOUNT="$(mktemp -d)"
+          hdiutil attach -nobrowse -readonly -mountpoint "$MOUNT" build/FIT-Studio-unsigned.dmg >/dev/null
+          ls -la "$MOUNT"
+          test -d "$MOUNT/FIT Studio.app" && test -L "$MOUNT/Applications" && test -f "$MOUNT/.DS_Store"
+          hdiutil detach "$MOUNT" >/dev/null
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: FIT-Studio-unsigned-dmg
+          path: fit-studio/build/FIT-Studio-unsigned.dmg
+          retention-days: 14
