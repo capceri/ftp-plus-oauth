@@ -7,7 +7,7 @@ const { test } = require('node:test');
 
 const { Bridge, loadConfig, readConfiguredPort } = require('../bridge/server/bridge');
 const { BridgeClient, tempDir } = require('./helpers/bridge-client');
-const { createMockFusion, defaultTools, freePort } = require('./helpers/mock-fusion');
+const { createMockFusion, defaultTools, freePort, freeSettingsPort } = require('./helpers/mock-fusion');
 
 const toolNames = (reply) => reply.result.tools.map((tool) => tool.name);
 const text = (reply) => reply.result.content.map((part) => part.text).join('\n');
@@ -77,12 +77,15 @@ test('remembers the tool list, so Claude sees Fusion tools while Fusion is close
   const fusion = createMockFusion();
   await fusion.start();
   const dir = tempDir();
-  await withBridge({ FUSION_MCP_URL: fusion.url, FUSION_BRIDGE_STATE_DIR: dir }, async (client) => {
-    await client.initialize();
-    await client.request('tools/list');
-  });
   const url = fusion.url;
-  await fusion.stop();
+  try {
+    await withBridge({ FUSION_MCP_URL: url, FUSION_BRIDGE_STATE_DIR: dir }, async (client) => {
+      await client.initialize();
+      await client.request('tools/list');
+    });
+  } finally {
+    await fusion.stop();
+  }
 
   await withBridge({ FUSION_MCP_URL: url, FUSION_BRIDGE_STATE_DIR: dir }, async (client) => {
     const init = await client.initialize();
@@ -155,14 +158,18 @@ test('explains an unreachable Fusion instead of failing, and keeps running', asy
 
 test('follows the port set in the Fusion-Essentials settings file', async () => {
   const fusion = createMockFusion();
-  const port = await fusion.start();
-  const dir = tempDir();
-  const settings = path.join(dir, 'FusionEssentialsSettings.json');
-  fs.writeFileSync(settings, JSON.stringify({
-    'GTF_Fusion-Essentials_MCP': { name: 'MCP Server', settings: { mcp_port: { type: 'number', default: port } } },
-  }));
-  assert.equal(readConfiguredPort(settings), port);
+  const port = await fusion.start(await freeSettingsPort());
   try {
+    const dir = tempDir();
+    const settings = path.join(dir, 'FusionEssentialsSettings.json');
+    const writePort = (value) => fs.writeFileSync(settings, JSON.stringify({
+      'GTF_Fusion-Essentials_MCP': { name: 'MCP Server', settings: { mcp_port: { type: 'number', default: value } } },
+    }));
+    writePort(49152); // outside the add-in's range: the add-in would refuse it, so the bridge ignores it
+    assert.equal(readConfiguredPort(settings), null);
+    writePort(port);
+    assert.equal(readConfiguredPort(settings), port);
+
     await withBridge({ FUSION_ESSENTIALS_SETTINGS: settings }, async (client) => {
       await client.initialize();
       const status = await client.callTool('fusion_connection_status');

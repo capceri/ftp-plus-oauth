@@ -39,6 +39,7 @@ jobs:
           .venv/bin/pip install --quiet pytest
 
       - name: Bridge tests, including the real Fusion-Essentials server
+        timeout-minutes: 5
         env:
           FUSION_ESSENTIALS_DIR: ${{ github.workspace }}/fusion-essentials-src
           FUSION_ESSENTIALS_PYTHON: ${{ github.workspace }}/fusion-mcp/.venv/bin/python
@@ -82,6 +83,7 @@ jobs:
         with:
           node-version: ${{ matrix.node }}
       - name: Bridge tests
+        timeout-minutes: 5
         run: node --test test/*.test.js
       - name: Shell scripts
         if: matrix.node == 22

@@ -151,4 +151,21 @@ async function freePort() {
   return port;
 }
 
-module.exports = { createMockFusion, defaultTools, freePort };
+// A free port Fusion-Essentials would accept in its settings (1024-49151). Port 0 is no use for
+// that: macOS hands out 49152 and up, Linux anything up to 60999.
+async function freeSettingsPort() {
+  for (;;) {
+    const port = 20000 + Math.floor(Math.random() * (49151 - 20000));
+    const server = http.createServer();
+    const free = await new Promise((resolve) => {
+      server.once('error', () => resolve(false));
+      server.listen(port, '127.0.0.1', () => resolve(true));
+    });
+    if (free) {
+      await new Promise((resolve) => server.close(resolve));
+      return port;
+    }
+  }
+}
+
+module.exports = { createMockFusion, defaultTools, freePort, freeSettingsPort };
