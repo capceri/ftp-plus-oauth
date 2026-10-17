@@ -27,17 +27,23 @@ function startAddIn(port) {
   });
   const lines = [];
   let waiting = null;
+  const report = () => `the Fusion-Essentials server printed: ${lines.join(' || ')}`;
   readline.createInterface({ input: child.stdout }).on('line', (line) => {
     lines.push(line);
-    if (waiting && waiting.match(line)) {
+    if (!waiting) return;
+    if (line.startsWith('failed')) {
+      clearTimeout(waiting.timer);
+      waiting.reject(new Error(report()));
+      waiting = null;
+    } else if (waiting.match(line)) {
       clearTimeout(waiting.timer);
       waiting.resolve();
       waiting = null;
     }
   });
   const next = (match) => new Promise((resolve, reject) => {
-    const timer = setTimeout(() => reject(new Error(`the Fusion-Essentials server did not report back; it printed: ${lines.join(' | ')}`)), 30000);
-    waiting = { match, resolve, timer };
+    const timer = setTimeout(() => reject(new Error(`no answer in 45 s; ${report()}`)), 45000);
+    waiting = { match, resolve, reject, timer };
   });
   return {
     ready: next((line) => line.startsWith('ready')),
@@ -57,7 +63,7 @@ test('works with the real Fusion-Essentials server across add-in reloads and dow
   const port = await freePort();
   const addIn = startAddIn(port);
   await addIn.ready;
-  const client = new BridgeClient({ FUSION_MCP_URL: `http://127.0.0.1:${port}/mcp`, FUSION_CONNECT_WAIT_SECONDS: '15' });
+  const client = new BridgeClient({ FUSION_MCP_URL: `http://127.0.0.1:${port}/mcp`, FUSION_CONNECT_WAIT_SECONDS: '40' });
   try {
     const init = await client.initialize();
     assert.equal(init.result.serverInfo.name, 'Fusion-Essentials MCP Server');
@@ -77,9 +83,10 @@ test('works with the real Fusion-Essentials server across add-in reloads and dow
 
     // The add-in stopped (Fusion closed); a call made meanwhile waits until it is back.
     await addIn.command('stop');
-    const pending = client.callTool('workspace_orient', {}, 30000);
-    setTimeout(() => addIn.command('restart'), 2000);
-    assert.equal(text(await pending), 'Untitled design is open');
+    const pending = client.callTool('workspace_orient', {}, 60000);
+    const back = new Promise((resolve) => { setTimeout(resolve, 2000); }).then(() => addIn.command('restart'));
+    const [reply] = await Promise.all([pending, back]);
+    assert.equal(text(reply), 'Untitled design is open');
 
     // A tool that fails comes back as the add-in's own error result.
     const refused = await client.callTool('model_extrude', { distance: 1, colour: 'red' });

@@ -8,11 +8,13 @@ add-in's own Item/Tool classes, and serves on 127.0.0.1:<port>.
 
 Prints "ready <port>" once serving. Each "restart" line on stdin stops the server and starts a
 new one on the same port, as reloading the add-in does; "stop" stops it until the next
-"restart". Exits when stdin closes.
+"restart". Exits when stdin closes. Progress goes to stdout as "log: ..." lines, and a server
+that cannot start prints "failed: ..." before exiting, so the test can say what went wrong.
 """
 
 import os
 import sys
+import time
 import traceback
 
 repo, port = sys.argv[1], int(sys.argv[2])
@@ -55,30 +57,49 @@ def items():
 running = None
 
 
+def say(text):
+    print(text, flush=True)
+
+
 def start():
+    """Start the server, giving the OS up to 20 s to free the port after the last one."""
     global running
-    result = mcp.start_server("127.0.0.1", port, items=items(), job_store=object())
-    if result.get("status") != mcp.START_OK:
-        sys.exit(f"could not start the Fusion-Essentials server: {result}")
-    running = result
+    deadline = time.monotonic() + 20
+    attempt = 0
+    while True:
+        attempt += 1
+        result = mcp.start_server("127.0.0.1", port, items=items(), job_store=object())
+        if result.get("status") == mcp.START_OK:
+            running = result
+            say(f"ready {port} (attempt {attempt})")
+            return
+        say(f"log: start attempt {attempt} on port {port}: {result}")
+        if time.monotonic() > deadline:
+            say(f"failed: could not start the Fusion-Essentials server on port {port}: {result}")
+            sys.exit(1)
+        time.sleep(0.5)
 
 
 def stop():
     global running
     if running:
-        mcp.stop_server(running["http_server"], running["thread"])
+        began = time.monotonic()
+        stopped = mcp.stop_server(running["http_server"], running["thread"])
+        say(f"log: stop_server returned {stopped} after {time.monotonic() - began:.1f} s")
         running = None
 
 
-start()
-print(f"ready {port}", flush=True)
-for line in sys.stdin:
-    command = line.strip()
-    if command == "restart":
-        stop()
-        start()
-        print(f"ready {port}", flush=True)
-    elif command == "stop":
-        stop()
-        print("stopped", flush=True)
-stop()
+try:
+    start()
+    for line in sys.stdin:
+        command = line.strip()
+        if command == "restart":
+            stop()
+            start()
+        elif command == "stop":
+            stop()
+            say("stopped")
+    stop()
+except Exception:
+    say("failed: " + traceback.format_exc().replace("\n", " | "))
+    sys.exit(1)
