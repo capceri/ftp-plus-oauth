@@ -1,0 +1,90 @@
+name: Fusion MCP
+
+on:
+  push:
+    paths:
+      - "fusion-mcp/**"
+      - ".github/workflows/fusion-mcp.yml"
+  workflow_dispatch:
+
+defaults:
+  run:
+    working-directory: fusion-mcp
+
+env:
+  # Keep in step with TESTED_FUSION_ESSENTIALS_REF in fusion-mcp/install.sh.
+  FUSION_ESSENTIALS_REF: 925e8c11840bacc4682290143c3068e04e3a3ade
+
+jobs:
+  macos:
+    runs-on: macos-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Fusion-Essentials source
+        uses: actions/checkout@v4
+        with:
+          repository: Philip-Mestenhauser/Fusion-Essentials
+          ref: ${{ env.FUSION_ESSENTIALS_REF }}
+          path: fusion-essentials-src
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Python for Fusion-Essentials' test harness
+        run: |
+          python3 -m venv .venv
+          .venv/bin/pip install --quiet pytest
+
+      - name: Bridge tests, including the real Fusion-Essentials server
+        timeout-minutes: 5
+        env:
+          FUSION_ESSENTIALS_DIR: ${{ github.workspace }}/fusion-essentials-src
+          FUSION_ESSENTIALS_PYTHON: ${{ github.workspace }}/fusion-mcp/.venv/bin/python
+        run: node --test test/*.test.js
+
+      - name: Claude Desktop extension
+        run: |
+          npx --yes @anthropic-ai/mcpb@2.1.2 validate bridge/manifest.json
+          scripts/pack_mcpb.sh build/fusion-essentials.mcpb
+          npx --yes @anthropic-ai/mcpb@2.1.2 info build/fusion-essentials.mcpb
+
+      - name: Installer, in a scratch home folder
+        run: |
+          export HOME="$RUNNER_TEMP/home"
+          autodesk="$HOME/Library/Application Support/Autodesk"
+          mkdir -p "$autodesk/webdeploy" "$autodesk/Autodesk Fusion 360/API/AddIns"
+          addin="$autodesk/Autodesk Fusion 360/API/AddIns/Fusion-Essentials"
+          support="$HOME/Library/Application Support/Fusion MCP Bridge"
+
+          NO_OPEN=1 ./install.sh
+          test -f "$addin/Fusion-Essentials.py"
+          test -f "$support/Fusion-Essentials.mcpb"
+          # The add-in's own settings code, on the file the installer wrote (osascript, as on a Mac).
+          .venv/bin/python test/helpers/check_addin_settings.py "$addin" "$HOME"
+
+          # Running it again replaces the add-in, keeps a backup and leaves the setting on.
+          NO_OPEN=1 ./install.sh
+          ls "$support/backups" | grep -q '^Fusion-Essentials-'
+          .venv/bin/python test/helpers/check_addin_settings.py "$addin" "$HOME"
+
+  linux:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    strategy:
+      matrix:
+        # The extension declares Node 18 or later; Claude Desktop runs it with its own Node.
+        node: [18, 22]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+      - name: Bridge tests
+        timeout-minutes: 5
+        run: node --test test/*.test.js
+      - name: Shell scripts
+        if: matrix.node == 22
+        run: shellcheck install.sh scripts/pack_mcpb.sh
