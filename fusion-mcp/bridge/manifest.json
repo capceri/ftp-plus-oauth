@@ -1,0 +1,65 @@
+{
+  "manifest_version": "0.3",
+  "name": "fusion-essentials",
+  "display_name": "Fusion (Fusion-Essentials)",
+  "version": "1.0.0",
+  "description": "Connects Claude to Autodesk Fusion through the Fusion-Essentials add-in, and keeps the connection up when Fusion restarts.",
+  "long_description": "Claude talks to this extension, and the extension talks to the Fusion-Essentials add-in's MCP server inside Autodesk Fusion (http://127.0.0.1:37182/mcp by default; it follows the add-in's mcp_port setting). The connector stays up while Fusion is closed, starting, reloading the add-in or busy: the extension starts a fresh session when Fusion forgets the old one, waits for Fusion (starting it if needed) and keeps the last tool list so Claude always sees the Fusion tools. Two tools of its own, fusion_connection_status and fusion_reconnect, let Claude check and repair the connection without touching the screen.",
+  "author": {
+    "name": "capceri",
+    "url": "https://github.com/capceri"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/capceri/ftp-plus-oauth"
+  },
+  "homepage": "https://github.com/capceri/ftp-plus-oauth/tree/main/fusion-mcp",
+  "server": {
+    "type": "node",
+    "entry_point": "server/index.js",
+    "mcp_config": {
+      "command": "node",
+      "args": ["${__dirname}/server/index.js"],
+      "env": {
+        "FUSION_AUTO_LAUNCH": "${user_config.auto_launch_fusion}",
+        "FUSION_CONNECT_WAIT_SECONDS": "${user_config.connect_wait_seconds}"
+      }
+    }
+  },
+  "tools": [
+    {
+      "name": "fusion_connection_status",
+      "description": "Reports whether Autodesk Fusion and its Fusion-Essentials MCP server are reachable, and why not."
+    },
+    {
+      "name": "fusion_reconnect",
+      "description": "Connects to Fusion again, starting Fusion if needed, and refreshes the Fusion tool list."
+    }
+  ],
+  "tools_generated": true,
+  "keywords": ["autodesk", "fusion", "fusion 360", "cad", "cam"],
+  "compatibility": {
+    "platforms": ["darwin"],
+    "runtimes": {
+      "node": ">=18.0.0"
+    }
+  },
+  "user_config": {
+    "auto_launch_fusion": {
+      "type": "boolean",
+      "title": "Start Fusion when needed",
+      "description": "When Claude uses a Fusion tool and Fusion is not running, start Fusion in the background and wait for it.",
+      "default": true,
+      "required": false
+    },
+    "connect_wait_seconds": {
+      "type": "number",
+      "title": "Seconds to wait for Fusion",
+      "description": "How long a Fusion tool call waits for Fusion to answer (for example while Fusion starts) before reporting why it could not.",
+      "default": 45,
+      "min": 5,
+      "max": 600,
+      "required": false
+    }
+  }
+}
